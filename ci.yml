@@ -1,0 +1,85 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Cancel superseded runs on the same branch / PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ------------------------------------------------------- Selenium tests (CI)
+  test:
+    name: Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # The tests open a visible Chrome window, so give CI a virtual display.
+      # Chrome is preinstalled on ubuntu-latest; Selenium Manager fetches the driver.
+      - name: Install Xvfb
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
+      - name: Run Selenium tests
+        run: |
+          set -eu
+
+          # Start the app in the background; always stop it when the step ends.
+          python app.py &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+
+          # Wait (up to 30 s) for the app to answer.
+          for _ in $(seq 1 30); do
+            curl -fs http://127.0.0.1:5001/ >/dev/null && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:5001/ >/dev/null
+
+          xvfb-run -a pytest -v
+
+  # ------------------------------------------------------------ Deploy (CD)
+  deploy:
+    name: Package & deploy
+    needs: [test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production   # add required reviewers in repo Settings > Environments
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build release bundle
+        run: |
+          mkdir dist
+          zip -j dist/task-list-app.zip app.py requirements.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: task-list-app
+          path: dist/task-list-app.zip
+
+      # TODO: replace with your real deployment (SSH/rsync, Azure, Fly.io, Render, ...).
+      # Store credentials in repo Settings > Secrets and variables > Actions.
+      - name: Deploy
+        run: echo "Add your deployment commands here"
