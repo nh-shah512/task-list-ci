@@ -7,7 +7,7 @@ PAGE = """
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Task List</title>
+  <title> My Tasks </title>
   <style>
     body { font-family: system-ui, sans-serif; background: #f4f6f8; margin: 0; }
     main { max-width: 480px; margin: 3rem auto; background: #fff; padding: 2rem;
@@ -25,7 +25,7 @@ PAGE = """
 </head>
 <body>git
   <main>
-    <h1>Task List</h1>
+    <h1>My Tasks</h1>
     <form class="add" method="post" action="{{ url_for('index') }}">
       <input type="text" id="task-input" name="task" placeholder="What needs doing?"
              maxlength="100" required autofocus>
@@ -61,7 +61,7 @@ def create_app():
             if request.form.get("action") == "clear":
                 tasks.clear()
             else:
-                task = request.form.get("task", "").strip()
+                task = request.form.get("task", "")
                 if task:
                     tasks.append(task[:100])
             return redirect(url_for("index"))  # Post/Redirect/Get
